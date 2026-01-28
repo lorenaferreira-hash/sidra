@@ -1,0 +1,51 @@
+import requests
+import pandas as pd
+from fastapi import FastAPI, Query
+from typing import Optional, Dict
+
+app = FastAPI(title="API SIDRA GPT")
+
+# Grupos de Análise integrados conforme o script original [cite: 1-7]
+GRUPOS_ANALISE = {
+    "1": {"nome": "Saneamento Básico", "tabelas": {"3218": "Domicílios...", "9547": "Destino lixo", "9546": "Esgotamento", "3166": "Banheiro"}},
+    "2": {"nome": "Renda", "tabelas": {"10315": "Rendimento médio", "5438": "Rendimento 10 anos+", "6784": "Rendimento real", "2499": "Pobreza"}},
+    "3": {"nome": "Demografia", "tabelas": {"9514": "Sexo/Idade", "475": "Idade/Situação", "202": "Sexo/Situação", "9923": "Situação", "197": "Nascidos", "2684": "Óbitos", "6579": "Estimada", "1552": "Declaração idade"}},
+    "4": {"nome": "Condições de Moradia", "tabelas": {"9541": "Tipo domicílio", "9539": "Ocupação", "2633": "Energia", "9545": "Banheiro"}},
+    "5": {"nome": "Habitação e Urbanização", "tabelas": {"2636": "Pessoas/Dormitório", "2637": "Áreas públicas"}},
+    "6": {"nome": "Educação e Qualidade de Vida", "tabelas": {"1570": "Escolarização", "1571": "Crianças escola"}},
+    "7": {"nome": "Segurança e Saúde", "tabelas": {"5271": "Saúde", "5272": "Segurança"}},
+    "8": {"nome": "Mobilidade e Transporte", "tabelas": {"1266": "Transporte público", "2632": "Vias pavimentadas"}},
+    "9": {"nome": "Desastres e Vulnerabilidade", "tabelas": {"1861": "Risco", "9923": "Clima"}}
+}
+
+@app.get("/grupos")
+def listar_grupos():
+    """Retorna a lista de grupos para o GPT iniciar a conversa."""
+    return GRUPOS_ANALISE [cite: 1-7]
+
+@app.get("/metadados/{tabela_id}")
+def obter_metadados(tabela_id: str):
+    """Consulta períodos, variáveis e classificações [cite: 8, 19-23]."""
+    url = f"https://servicodados.ibge.gov.br/api/v3/agregados/{tabela_id}/metadados"
+    res = requests.get(url).json()
+    
+    # Extração simplificada para o GPT ler rápido
+    return {
+        "nome": res.get("nome"),
+        "periodos": [p['id'] for p in res.get("periodicidade", {}).get("periodos", [])],
+        "variaveis": [{"id": v["id"], "nome": v["nome"]} for v in res.get("variaveis", [])],
+        "classificacoes": [{"id": c["id"], "nome": c["nome"], "categorias": c["categorias"]} for c in res.get("classificacoes", [])]
+    } [cite: 19-23]
+
+@app.get("/dados")
+def consultar_dados(tabela: str, municipio: str, periodo: str, variavel: str, classificacao: Optional[str] = ""):
+    """Faz a chamada final ao SIDRA e retorna JSON [cite: 9-13]."""
+    # A URL monta a classificação dinamicamente se fornecida 
+    url = f"https://apisidra.ibge.gov.br/values/t/{tabela}/n6/{municipio}/v/{variavel}/p/{periodo}{classificacao}"
+    res = requests.get(url).json()
+    
+    if len(res) < 2: return {"erro": "Sem dados"} [cite: 10-11]
+    
+    df = pd.DataFrame(res[1:], columns=res[0])
+    # Mantém a lógica de renomeação do seu script [cite: 12-13]
+    return df.to_dict(orient="records")
